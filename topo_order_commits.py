@@ -1,5 +1,7 @@
 import os, zlib, sys
 
+
+
 def discover_git_dir():
     current = os.getcwd()
     #loop until directory == .git
@@ -29,8 +31,11 @@ def get_local_branch_names():
     git_dir = discover_git_dir()
     target_dir = os.path.join(git_dir, 'refs', 'heads')
 
-    for root, dirs, files in os.walk(target_dir):
-        names.append(files)
+    #walk through directory and get the relative filepath for each branch
+    for root, dir, files in os.walk(target_dir):
+        for file in files:
+            branch_file_path = os.path.join(root, file)
+            names.append(os.path.relpath(branch_file_path, target_dir))
     return names
 
 
