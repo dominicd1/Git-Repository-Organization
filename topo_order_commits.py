@@ -48,6 +48,7 @@ class CommitNode:
         self.commit_hash = commit_hash
         self.parents = set()
         self.children = set()
+        self.branch_names = set()
 
     def add_child(self, commit_hash):
         self.children.add(commit_hash)
@@ -61,6 +62,12 @@ class CommitNode:
         else:
             return True
 
+    def add_branch_name(self, branch_name):
+        self.branch_names.add(branch_name)
+
+    def get_branches(self):
+        return self.branch_names
+
     def get_parents(self):
         return self.parents
 
@@ -70,6 +77,9 @@ class CommitNode:
 
 def build_commit_graph():
     branches = get_local_branch_names()
+
+    #sort branch names to make it deterministic
+    branches.sort()
     git_dir = discover_git_dir()
     target_dir = os.path.join(git_dir, 'refs', 'heads')
     object_dir = os.path.join(git_dir, 'objects')
@@ -82,7 +92,11 @@ def build_commit_graph():
         #open branch file path to read in commit id
         with open(branch_file_path, "r") as ref_file:
             head = ref_file.read().strip()
-            
+
+        #create CommitNode for head node and add branch name to the head node
+        if head not in graph:
+            graph[head] = CommitNode(head)
+        graph[head].add_branch_name(branch)
 
         #locate the object of commit
 
@@ -98,9 +112,6 @@ def build_commit_graph():
 
             object_file_path = os.path.join(object_dir, commit_id[0:2], commit_id[2:])
 
-            #add head to graph since its the first node
-            if (commit_id not in graph):
-                graph[commit_id] = CommitNode(commit_id)
             
 
             #navigate to object file path and decompress it
@@ -152,7 +163,7 @@ def generate_topo_order(graph):
     parents_countdown= dict()
 
 
-    for commit in graph:
+    for commit in sorted(graph):
         #find all the commits in the graph without any children
         if not graph[commit].get_children():
             children.append(commit)
@@ -177,7 +188,7 @@ def generate_topo_order(graph):
         topo_order.append(child)
 
     #decrement the children count for each parent of that child
-        for parent in parents:
+        for parent in sorted(parents):
             parents_countdown[parent]-=1
 
             #if the parent has no more children, then the parent can be added to the print queue
@@ -188,14 +199,40 @@ def generate_topo_order(graph):
 
     return topo_order
 
+
+def topo_order_commits():
+
+    #build commit graph and topological order
+    graph = build_commit_graph()
+    topo_order = generate_topo_order(graph)
+
+    #iterate through each element in the topological order
+    for x in range(len(topo_order)):
+
+    #print all the branches associated with head nodes, which are the only CommitNode objects that have branch elements stored
+        commit_id = topo_order[x]
+        branches = graph[commit_id].get_branches()
+        print(commit_id, *sorted(branches))
+
+
+        #iterate through each element in topo order
+        if(x+1< len(topo_order)):
+            parents = set(graph[topo_order[x]].get_parents())
+
+        #grab the next commit
+            next_commit = topo_order[x+1]
+
+        #if the next commit is not in the set of parents, then add a sticky end
+            if next_commit not in parents:
+                print(" ".join(sorted(parents)) + "=")
+                print()
+
+                #then print the next children with a sticky start
+                next_children = graph[next_commit].get_children()
+                print("=" + " ".join(sorted(next_children)))
+        
         
 
 
-def main():
-    graph = build_commit_graph()
-    print(graph)
-    print(get_root_commits(graph))
-    print(generate_topo_order(graph))
 
-if __name__ == "__main__":
-    main()
+
